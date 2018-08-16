@@ -11,9 +11,11 @@ So I totally shouldn't be playing with this data. I SHOULD be editing a paper fo
 ### What did I learn?
 Looks like being a Party Leader is pretty expensive travel-wise at times. Simon Bridges' expenses were leaked earlier this week, but Jacinda Ardern also had expensive travel, which she talked about when the leak was first reported on. I can't find that article anymore (it was an RNZ one) but basically, if I recall, she said she was quite shocked by how high her own expenses were.
 
-I was a bit surprised that a lot of ministers ("Honourable") had no expenses, and ministers had lower expenses overall. Are the MPs that get ministerial positions more likely to live in Wellington? Or at least not represent the regions, from which travel costs might be higher? Turns out honour is cheap!
+~~I was a bit surprised that a lot of ministers ("Honourable") had no expenses, and ministers had lower expenses overall. Are the MPs that get ministerial positions more likely to live in Wellington? Or at least not represent the regions, from which travel costs might be higher? Turns out honour is cheap!~~ Turns out that it is actually because ministerial costs are reported seperately, and that is why a lot of ministers report nothing in their other expenses.
 
 I also learned that there were a surprising number of spelling mistakes when it comes to MPs' names. 
+
+**EDIT:** I  learned miniserial expenses are reported seperately. Thanks [Andrew](https://twitter.com/andrewtychen) and [Peter](https://twitter.com/pitakakariki) and [Luis](https://twitter.com/zentree)! I've added a sortable table about those expenses at the bottom of the post.
 
 # Data and where to get it
 Here are the links for the two datasets I use.
@@ -36,8 +38,8 @@ knitr::opts_chunk$set(warning=FALSE, message=FALSE, error=FALSE)
 Note all numeric values are in NZD.
 
 ```{r data, warning=FALSE, message=FALSE, error=FALSE}
-data = read_csv("Data/2018-08-16_members-expenses.csv")
-data_prev = read_csv("Data/2018-05-10_members-expenses.csv")
+data = read_csv("Data/2018-Q2_members-expenses.csv")
+data_prev = read_csv("Data/2018-Q1_members-expenses.csv")
 
 tidy_data = data %>% 
   rename(`Wellington Accommo-\ndation` = Accommodation, `Non Wellington Accommo-\ndation` = X4, `Air Travel` = Travel, `Surface Travel` = X6, `Inter-Parliamentary - Office of the Clerk` = `Inter-Parliamentary -\rOffice of the Clerk`) %>% 
@@ -94,6 +96,27 @@ final_data %>%
   summarise(Average = mean(`Grand Total`)) %>% 
   knitr::kable()
 
+final_data %>% 
+  group_by(Honourable) %>% 
+  summarise(Average = mean(`Wellington Accommo-\ndation`)) %>% 
+  knitr::kable()
+
+final_data %>% 
+  group_by(Honourable) %>% 
+  summarise(Average = mean(`Non Wellington Accommo-\ndation`)) %>% 
+  knitr::kable()
+
+
+final_data %>% 
+  group_by(Honourable) %>% 
+  summarise(Average = mean(`Air Travel`)) %>% 
+  knitr::kable()
+
+final_data %>% 
+  group_by(Honourable) %>% 
+  summarise(Average = mean(`Surface Travel`)) %>% 
+  knitr::kable()
+
 Hon = final_data %>% 
   ggplot(aes(`Grand Total`, fill=Honourable, colour = Honourable)) +
   geom_dotplot(binwidth = 5500) +
@@ -145,7 +168,7 @@ I saved it as a csv and cleaned it up - original and cleaned both on [GitHub](ht
 
 ```{r}
 
-data_prev = read_csv("Data/2018-05-10_members-expenses.csv")
+data_prev = read_csv("Data/2018-Q1_members-expenses.csv")
 
 names(data_prev) = names(tidy_data)[-9]
 
@@ -267,4 +290,54 @@ longitudinal %>%
 
 
 ```
+
+
+# Ministerial expenses
+```{r}
+
+ministerial = read_csv("Data/2018-Q1_ministerial-expenses.csv")
+names(ministerial)[1:5] = names(tidy_data)[2:6]
+
+tidy_ministerial = ministerial %>% 
+  filter(!(Member %in% c("Act", "Green", "Labour", "National", "NZ First", "Total", "Maori"))) %>% 
+  filter(!str_detect(Member, "Total")) %>% 
+  filter(!str_detect(Member, "Party")) %>%
+  mutate(Member = str_replace(Member, "Hon ", "")) %>% 
+  mutate(Member = str_replace(Member, "Rt ", "")) %>% 
+  gather(Category, Expense, -Member) %>% 
+  mutate(Notes = str_extract(Expense," \\(.*\\)")) %>% 
+  mutate(Expense = str_replace_all(Expense," \\(.*\\)", "")) %>% 
+  mutate(Expense = ifelse(str_detect(Expense, "\\("), "0", Expense)) %>% 
+  mutate(Expense = str_replace(Expense, "-", "0")) %>% 
+  mutate(Expense = ifelse(str_detect(Notes, "D") & !is.na(Notes), "0", Expense)) %>% 
+  mutate(Expense = parse_number(Expense)) %>% 
+  select(-Notes) %>% 
+  spread(Category, Expense) %>% 
+  select(Member, `Wellington Accommo-\ndation`, `Non Wellington Accommo-\ndation`, `Air Travel`, `Surface Travel`, `Sub Total Internal Costs`, `Official Cabinet Approved International Travel (A)`) %>% 
+  filter(Member != "Te Ururoa Flavel") %>% 
+  arrange(desc(`Sub Total Internal Costs`))
+
+DT::datatable(tidy_ministerial)
+
+tidy_ministerial %>% 
+  ggplot(aes(`Sub Total Internal Costs`)) +
+  geom_histogram() +
+  ylab(label = "Count") +
+  theme_bw() +
+  theme(panel.border = element_blank()) +
+  ggtitle("Ministerial expenses (excluding International Travel)")
+
+```
+
+
+## Notes
+
+See original xlsx for how these wrrok. I've removed corrections and items that related to costs from previous quarters.
+
+Excludes GST, Fringe Benefit Tax & depreciation as applicable						
+Jacinda Ardern: Correction of $6904, accommodation  costs paid as part of an administration error 						
+Winston Peters: Correction of $3945, accommodation  costs paid as part of an administration error 						
+Kelvin Davis: Relates to travel reconciliations for international trips in previous quarters.						
+Kelvin Davis: \$2,464 of costs were incurred as part of an administration error and will be corrected to Hon Davis' office next quarter. The total cost for "Surface Travel for Hon Kelvin Davis for this quarter is \$15,358, the Sub Total Internal Costs should read \$38,860."						
+Tracey Martin: Includes $4,537 of accommodation costs for the previous quarter						
 
