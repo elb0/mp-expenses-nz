@@ -6,7 +6,7 @@ output:
     toc: true
 ---
 
-So I totally shouldn't be playing with this data. I SHOULD be editting a paper for my thesis. But come on, this is pretty interesting! If you would like to play with any of this, all my files are on [GitHub](https://github.com/elb0/mp-expenses-nz).
+So I totally shouldn't be playing with this data. I SHOULD be editing a paper for my thesis. But come on, this is pretty interesting! If you would like to play with any of this, all my files are on [GitHub](https://github.com/elb0/mp-expenses-nz).
 
 ### What did I learn?
 Looks like being a Party Leader is pretty expensive travel-wise at times. Simon Bridges' expenses were leaked earlier this week, but Jacinda Ardern also had expensive travel, which she talked about when the leak was first reported on. I can't find that article anymore (it was an RNZ one) but basically, if I recall, she said she was quite shocked by how high her own expenses were.
