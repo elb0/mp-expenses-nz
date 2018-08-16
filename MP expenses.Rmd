@@ -1,0 +1,270 @@
+---
+title: "A quick look at MPs' expenses 2018"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+---
+
+So I totally shouldn't be playing with this data. I SHOULD be editting a paper for my thesis. But come on, this is pretty interesting! If you would like to play with any of this, all my files are on [GitHub](https://github.com/elb0/mp-expenses-nz).
+
+### What did I learn?
+Looks like being a Party Leader is pretty expensive travel-wise at times. Simon Bridges' expenses were leaked earlier this week, but Jacinda Ardern also had expensive travel, which she talked about when the leak was first reported on. I can't find that article anymore (it was an RNZ one) but basically, if I recall, she said she was quite shocked by how high her own expenses were.
+
+I was a bit surprised that a lot of ministers ("Honourable") had no expenses, and ministers had lower expenses overall. Are the MPs that get ministerial positions more likely to live in Wellington? Or at least not represent the regions, from which travel costs might be higher? Turns out honour is cheap!
+
+I also learned that there were a surprising number of spelling mistakes when it comes to MPs' names. 
+
+# Data and where to get it
+Here are the links for the two datasets I use.
+
+Main: [Data about expenses from Parliament](https://www.parliament.nz/en/mps-and-electorates/mps-expenses/)
+
+Extra: [Data about electorate and list stats from Stats NZ](https://catalogue.data.govt.nz/dataset/members-of-parliament/resource/89069a40-abcf-4190-9665-3513ff004dd8?inner_span=True)
+
+For the main dataset, to make my life easier, I deleted the notes and the first two rows of the .xlsx file and saved it as a csv. Original and my modified csv both available in the Data folder of the repository on GitHub.
+
+## Setting up data
+```{r set_up, warning=FALSE, message=FALSE, error=FALSE}
+
+library(tidyverse)
+knitr::opts_chunk$set(warning=FALSE, message=FALSE, error=FALSE)
+
+```
+
+### Exploring the data
+Note all numeric values are in NZD.
+
+```{r data, warning=FALSE, message=FALSE, error=FALSE}
+data = read_csv("Data/2018-08-16_members-expenses.csv")
+data_prev = read_csv("Data/2018-05-10_members-expenses.csv")
+
+tidy_data = data %>% 
+  rename(`Wellington Accommo-\ndation` = Accommodation, `Non Wellington Accommo-\ndation` = X4, `Air Travel` = Travel, `Surface Travel` = X6, `Inter-Parliamentary - Office of the Clerk` = `Inter-Parliamentary -\rOffice of the Clerk`) %>% 
+  filter(!is.na(Member)) %>% 
+ fill(Party) %>% 
+  gather(Category, Expense, -Member, -Party) %>% 
+  mutate(Expense = str_replace(Expense, "-", "0")) %>% 
+  mutate(Expense = parse_number(Expense)) %>% 
+  spread(Category, Expense) %>% 
+  select(Party, Member, `Wellington Accommo-\ndation`, `Non Wellington Accommo-\ndation`, `Air Travel`, `Surface Travel`, `Grand Total`, `Inter-Parliamentary - Office of the Clerk`) %>% 
+  mutate(Notes = str_extract(Member," \\(.*\\)")) %>% 
+  mutate(Member = str_remove(Member," \\(.*\\)")) %>% 
+  mutate(Member = str_replace(Member, "Julie-Anne", "Julie Anne")) %>% 
+  mutate(Member = str_replace(Member, "Gharahman Golriz", "Ghahraman Golriz")) %>% 
+  mutate(Member = ifelse(str_detect(Member, "Swarbrick"), "Swarbrick Chlöe", Member))
+
+extra_data = read_csv("Data/members-contact-details-as-at-5-july-2018.csv") %>% 
+  rename(Member = Contact) %>% 
+  mutate(Member = str_remove(Member, ",")) %>% 
+  mutate(Electorate = ifelse(is.na(Electorate), "List", "Electorate"))  %>% 
+  mutate(Member = str_replace(Member, "Andersen Virginia", "Andersen Ginny")) %>% 
+  mutate(Member = str_replace(Member, "Bidois Daniel", "Bidois Dan")) %>% 
+  mutate(Member = str_replace(Member, "Bishop Christopher", "Bishop Chris")) %>% 
+  mutate(Member = str_replace(Member, "Craig Elizabeth", "Craig Liz")) %>% 
+  mutate(Member = str_replace(Member, "Doocey Matthew", "Doocey Matt")) %>% 
+  mutate(Member = str_replace(Member, "Finlayson Christopher", "Finlayson Chris")) %>% 
+  mutate(Member = str_replace(Member, "Lubeck Maria", "Lubeck Marja")) %>%  
+  mutate(Member = str_replace(Member, "O'Connor Gregory", "O'Connor Greg")) %>%  
+  mutate(Member = ifelse(str_detect(Member, "Swarbrick"), "Swarbrick Chlöe", Member)) %>%  
+  mutate(Member = str_replace(Member, "Twyford Philip", "Twyford Phil")) %>% 
+  mutate(Member = str_replace(Member, "van de Molen Timothy", "van de Molen Tim")) %>%  
+  mutate(Member = str_replace(Member, "Marcroft Jennifer", "Marcroft Jenny")) %>% 
+  select(-Party)
+  
+final_data = tidy_data %>% 
+  full_join(extra_data, by = "Member") %>% 
+  mutate(`Job Title` = ifelse(is.na(`Job Title`), "Retired", `Job Title`)) %>% 
+  mutate(Electorate = `Job Title`) %>% 
+  mutate(Electorate = str_replace(Electorate, "Member for", "")) %>% 
+  mutate(Electorate = str_replace(Electorate, "Member", "")) %>% 
+  mutate(Honourable = ifelse(str_detect(Salutation, "Hon"), "Honourable", "Not Honourable")) %>% 
+  mutate(Honourable = ifelse(is.na(Salutation), "Not Honourable", Honourable)) %>% 
+  select(-`Job Title`, -Salutation, -`Parliament Email`)
+
+DT::datatable(final_data)
+
+```
+
+# Some quick graphs
+
+```{r, fig.width=8, warning=FALSE, message=FALSE, error=FALSE}
+final_data %>% 
+  group_by(Honourable) %>% 
+  summarise(Average = mean(`Grand Total`)) %>% 
+  knitr::kable()
+
+Hon = final_data %>% 
+  ggplot(aes(`Grand Total`, fill=Honourable, colour = Honourable)) +
+  geom_dotplot(binwidth = 5500) +
+  facet_wrap(~Honourable) +
+  theme(axis.title.y = element_blank(), axis.ticks.y = element_blank(), axis.text.y = element_blank(), panel.grid = element_blank(), panel.background = element_blank()) +
+  ggtitle("Are ministers more expensive?")
+
+final_data %>% 
+  ggplot(aes(`Grand Total`, fill=Honourable, colour = Honourable)) +
+  geom_dotplot(binwidth = 5500) +
+  facet_wrap(~Honourable) +
+  theme(axis.title.y = element_blank(), axis.ticks.y = element_blank(), axis.text.y = element_blank(), panel.grid = element_blank(), panel.background = element_blank()) +
+  ggtitle("Are ministers more expensive?")
+```
+
+```{r, warning=FALSE, message=FALSE, error=FALSE}
+byparty = final_data %>% 
+  group_by(Party) %>% 
+  summarise(Mean = round(mean(`Grand Total`),0), Median = scales::dollar(median(`Grand Total`)),  Min = scales::dollar(min(`Grand Total`)), Max = scales::dollar(max(`Grand Total`)), `Number of Members` = n()) %>% 
+  arrange(desc(Mean))
+
+DT::datatable(byparty)
+```
+
+### Annoying things if you want to do stuff with this data
+Julie Anne has a hyphen in one dataset and not in the other, Golriz and Marja had outright spelling mistakes, and Chlöe's dots were missing in one. AND there weren't commas between family and person names in this quarter's file so I've just followed that format, which is a pain in the bum.
+  
+### Totes conspiracy
+Winston Peters is the only person with a blank in their "Inter-Parliamentary - Office of the Clerk" column, instead of a "-". WHAT COULD IT MEAN?!?! 
+
+Probably that the person or people tasked with putting this together were under some pressure due to the leak and it didn't get fine-tooth combed. The spelling mistakes probably support that too.
+
+### Data notes from original file		
+
+These are relevant to members with these notes in the notes column
+
+(1) Some costs included in this Surface Travel disclosure relate to periods before 1 April 2018 due to the late arrival of invoices from VIP Transport. 			
+
+(2) The surface travel figures include VIP Transport costs incurred as Speaker. Note that Parliamentary Service users of VIP Transport are charged at a higher rate than Ministers.	
+
+(3) The surface travel figures include VIP Transport costs incurred as Leader of the Opposition. Note that Parliamentary Service users of VIP Transport are charged at a higher rate than Ministers.	
+
+# Previous period of data (1 January - 31 March)
+
+I think it would be so interesting to look into this more across time! 
+
+I've just taken the previous file and taken a quick look. 
+I saved it as a csv and cleaned it up - original and cleaned both on [GitHub](https://github.com/elb0/mp-expenses-nz).
+
+```{r}
+
+data_prev = read_csv("Data/2018-05-10_members-expenses.csv")
+
+names(data_prev) = names(tidy_data)[-9]
+
+tidy_data_prev = data_prev %>% 
+  filter(!is.na(Member)) %>%
+  mutate(Member = str_replace(Member, ",", "")) %>% 
+ fill(Party) %>% 
+  gather(Category, Expense, -Member, -Party) %>% 
+  mutate(Expense = str_replace(Expense, "-", "0")) %>% 
+  mutate(Expense = parse_number(Expense)) %>% 
+  spread(Category, Expense) %>% 
+  select(Party, Member, `Wellington Accommo-\ndation`, `Non Wellington Accommo-\ndation`, `Air Travel`, `Surface Travel`, `Grand Total`, `Inter-Parliamentary - Office of the Clerk`) %>% 
+  mutate(Notes = str_extract(Member," \\(.*\\)")) %>% 
+  mutate(Member = str_remove(Member," \\(.*\\)")) %>% 
+  mutate(Member = str_replace(Member, "Julie-Anne", "Julie Anne")) %>% 
+  mutate(Member = str_replace(Member, "Gharahman Golriz", "Ghahraman Golriz")) %>% 
+  mutate(Member = ifelse(str_detect(Member, "Swarbrick"), "Swarbrick Chlöe", Member)) %>% 
+  mutate(Member = str_replace(Member, "Warren-Clarke Angie", "Warren-Clark Angie"))
+
+
+
+final_data_prev = tidy_data_prev %>% 
+  full_join(extra_data, by = "Member") %>% 
+  mutate(`Job Title` = ifelse(is.na(`Job Title`), "Retired", `Job Title`)) %>% 
+  mutate(Electorate = `Job Title`) %>% 
+  mutate(Electorate = str_replace(Electorate, "Member for", "")) %>% 
+  mutate(Electorate = str_replace(Electorate, "Member", "")) %>% 
+  mutate(Honourable = ifelse(str_detect(Salutation, "Hon"), "Honourable", "Not Honourable")) %>% 
+  mutate(Honourable = ifelse(is.na(Salutation), "Not Honourable", Honourable)) %>% 
+  select(-`Job Title`) %>% 
+  filter(!is.na(Party))
+
+```
+
+```{r, fig.width=8, warning=FALSE, message=FALSE, error=FALSE}
+final_data_prev %>% 
+  group_by(Honourable) %>% 
+  summarise(Average = round(mean(`Grand Total`), 0)) %>% 
+  knitr::kable()
+
+final_data_prev %>% 
+  ggplot(aes(`Grand Total`, fill=Honourable, colour = Honourable)) +
+  geom_dotplot(binwidth = 4000) +
+  facet_wrap(~Honourable) +
+  theme(axis.title.y = element_blank(), axis.ticks.y = element_blank(), axis.text.y = element_blank(), panel.grid = element_blank(), panel.background = element_blank()) +
+  ggtitle("Are ministers more expensive?")
+
+```
+
+```{r, fig.height=10, fig.width=8, warning=FALSE, message=FALSE, error=FALSE}
+
+byparty_prev = final_data_prev %>% 
+  group_by(Party) %>% 
+  summarise(Mean = round(mean(`Grand Total`),0), Median = scales::dollar(median(`Grand Total`)),  Min = scales::dollar(min(`Grand Total`)), Max = scales::dollar(max(`Grand Total`)), `Number of Members` = n()) %>% 
+  arrange(desc(Mean))
+
+DT::datatable(byparty_prev)
+
+```
+
+#### These notes are from the previous period
+(1) The surface travel figures include VIP Transport costs from the period when the member was Leader of the Opposition. Note that Parliamentary Service users of VIP Transport are charged at a higher rate than Ministers. 
+
+(2) The surface travel figures include costs from the period when the member was Leader of the Opposition.
+
+
+# Comparing the last two periods
+
+There are probably quarter effects that just comparing the last two quarters won't see. I'd love to [hear if you do more investigation!](https://twitter.com/Liza_Bolton) 
+
+```{r}
+
+longitudinal = final_data %>% 
+  full_join(final_data_prev, by=c("Party", "Member"), suffix = c(" (most recent quarter)", " (previous quarter)")) %>% 
+  mutate(Difference = `Grand Total (most recent quarter)`- `Grand Total (previous quarter)`) 
+``` 
+
+## Histogram of differences
+Notice Jacinda Ardern and Simon Bridges as the outliers. Ardern had no expenses in that last quarter, probably due to being on maternity leave.
+
+```{r}
+longitudinal %>% 
+  ggplot(aes(Difference)) +
+  geom_histogram() +
+  theme(axis.title.y = element_blank(), axis.ticks.y = element_blank(), axis.text.y = element_blank(), panel.grid = element_blank(), panel.background = element_blank()) +
+  ggtitle("Distribution of changes in expenses")
+
+```
+
+## Changes in expenses by Member
+```{r}
+longitudinal %>% 
+  select(Member, Difference, Party) %>% 
+  arrange(desc(Difference)) %>%
+  mutate(Difference = format(scales::dollar(Difference))) %>% 
+  DT::datatable()
+```  
+
+## Change in expenses by Party
+```{r}
+longitudinal %>% 
+  select(Member, Difference, Party) %>% 
+  group_by(Party) %>% 
+  summarise(`Mean Difference` = scales::dollar(mean(Difference, na.rm=TRUE)), `Median Difference` = scales::dollar(median(Difference, na.rm=TRUE))) %>% 
+  arrange(desc(`Mean Difference`)) %>% 
+  DT::datatable() 
+
+```
+
+```{r eval = FALSE}
+
+longitudinal %>% 
+  ggplot(aes(Difference, fill = Party)) +
+  geom_histogram() + 
+  facet_grid(~Party) +
+  theme(axis.title.y = element_blank(), axis.ticks.y = element_blank(), axis.text.y = element_blank(), panel.grid = element_blank(), panel.background = element_blank()) +
+  ggtitle("Difference over the last two quarters?") +
+  scale_fill_manual(values=c("yellow", "green", "red", "blue", "black")) 
+
+
+```
+
